@@ -89,6 +89,7 @@ Stores a single `users` table with username, email, BCrypt-hashed password, full
 ### **Request lifecycle.** 
 A login request starts at the browser over HTTPS and reaches Apache on port 443, which decrypts it and forwards it to the Spring Boot application on port 8080. The request passes through `JwtAuthFilter` since it is a public route, then reaches `AuthController`, `AuthService`, and `AuthenticationManager`, where the password is checked against the BCrypt hash in PostgreSQL. If the credentials are valid, `JwtUtils.generateToken()` creates a token, and the response is returned to the browser through the same path.
 
+
 ## **API Endpoints**
 All endpoints are prefixed with `/api` so Apache can identify and forward them correctly. The backend exposes three endpoints across two controllers.
  
@@ -118,4 +119,45 @@ Requires `Authorization: Bearer <token>`. The `JwtAuthFilter` validates the toke
 403     — token is missing, expired, or tampered with
 ```
 
+## Security Features
+### **Password hashing (BCrypt).**  
+Passwords are securely hashed using BCrypt with a cost factor of 12 (4096 iterations). This makes hashing intentionally slow, which helps protect against brute-force attacks. Each password is also salted automatically, so identical passwords never produce the same hash. The original password is never stored or exposed—Spring Security handles verification safely during login.
 
+### **Secret management.**  
+Sensitive data like the JWT secret and database password are stored in environment variables, not in the codebase. Docker Compose loads them from a `.env` file at runtime. This file is excluded from version control, and only a safe `.env.example` template is shared.
+
+### **TLS (secure connections).**  
+The server only allows modern, secure protocols (TLS 1.2 and 1.3). Older, insecure versions are disabled. It also uses strong encryption (ECDHE) that ensures forward secrecy—meaning even if a key is compromised later, past data remains secure. All HTTP traffic is automatically redirected to HTTPS.
+
+### **HTTP security headers.**  
+Several headers are enabled to protect users:
+- `Strict-Transport-Security`: forces HTTPS for 2 years
+- `X-Frame-Options: DENY`: prevents clickjacking
+- `X-Content-Type-Options: nosniff`: blocks MIME-type attacks
+- `Referrer-Policy`: limits data shared with other sites
+
+### **Network isolation & container security.**  
+Only the web server (Apache) is publicly accessible. The database and backend are hidden inside the Docker network. The application also runs as a non-root user, reducing the risk if the container is compromised.
+
+### **CORS policy.**  
+Only approved frontend origins (set via environment variables) can access the API. Requests from other origins are blocked early, preventing unauthorized cross-site requests.
+
+
+## **Apache Configuration**
+Apache configuration files are stored in `src/main/resources/apache/` and mounted into the `httpd:2.4-alpine` container using Docker volumes. This lets you update Apache settings by just restarting the container—no need to rebuild the image.
+
+### **Local (`httpd.local.conf`)**  
+- Loads only the modules needed for serving static files and proxying.  
+- No SSL modules, so no certificate errors.  
+- `VirtualHost *:80` serves `index.html` from `frontend/`.  
+- `FallbackResource /index.html` ensures SPA routing works.  
+- `/api` requests are forwarded to `http://login-service:8080` using Docker’s internal DNS.
+
+### **Production (`httpd.prod.conf`)**  
+- Adds SSL support with `mod_ssl`.  
+- HTTP (`:80`) redirects all traffic to HTTPS (`:443`) with a `301`.  
+- HTTPS uses Let's Encrypt certificates mounted from `/etc/letsencrypt`.  
+- Only TLS 1.2 and 1.3 are allowed, with security headers enabled.  
+- Special settings:  
+  - `SSLUseStapling off` avoids errors with DuckDNS Let’s Encrypt certificates.  
+  - `User daemon` / `Group daemon` fixes Alpine warnings about missing web server users.
