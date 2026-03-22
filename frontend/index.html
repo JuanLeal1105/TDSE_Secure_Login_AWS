@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SecureLogin — JWT Auth Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:        #080c10;
+      --bg2:       #0d1117;
+      --bg3:       #161b22;
+      --border:    #21262d;
+      --border-hi: #30363d;
+      --accent:    #00d4aa;
+      --accent2:   #0ea5e9;
+      --danger:    #f85149;
+      --warn:      #e3b341;
+      --text:      #e6edf3;
+      --muted:     #7d8590;
+      --card-glow: 0 0 0 1px var(--border), 0 8px 32px rgba(0,212,170,.07);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,170,.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,170,.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      z-index: 0; pointer-events: none;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      width: 600px; height: 600px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,212,170,.08) 0%, transparent 70%);
+      top: -200px; right: -200px;
+      z-index: 0; pointer-events: none;
+    }
+    #app { position: relative; z-index: 1; width: 100%; max-width: 460px; padding: 24px 16px; }
+    .logo { text-align: center; margin-bottom: 32px; }
+    .logo-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 52px; height: 52px;
+      border: 1px solid var(--accent); border-radius: 14px; margin-bottom: 12px;
+      box-shadow: 0 0 24px rgba(0,212,170,.2), inset 0 0 12px rgba(0,212,170,.05);
+    }
+    .logo-icon svg { width: 26px; height: 26px; }
+    .logo h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+    .logo span { color: var(--accent); }
+    .logo p { font-size: 12px; color: var(--muted); margin-top: 4px; font-family: 'IBM Plex Mono', monospace; }
+    .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--card-glow); overflow: hidden; }
+    .tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); }
+    .tab-btn {
+      padding: 14px; background: none; border: none; color: var(--muted);
+      font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600;
+      letter-spacing: .5px; text-transform: uppercase; cursor: pointer; transition: all .2s; position: relative;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); background: rgba(0,212,170,.04); }
+    .tab-btn.active::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+      height: 2px; background: var(--accent); border-radius: 2px 2px 0 0;
+    }
+    .panel { display: none; padding: 28px; }
+    .panel.active { display: block; animation: fadeIn .2s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+    .field { margin-bottom: 16px; }
+    label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin-bottom: 6px; font-family: 'IBM Plex Mono', monospace; }
+    input {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 8px; padding: 11px 14px; color: var(--text);
+      font-family: 'IBM Plex Mono', monospace; font-size: 14px;
+      transition: border-color .2s, box-shadow .2s; outline: none;
+    }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,212,170,.12); }
+    input::placeholder { color: var(--muted); }
+    .btn {
+      width: 100%; padding: 12px; border: none; border-radius: 8px;
+      font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700;
+      letter-spacing: .5px; cursor: pointer; transition: all .2s; margin-top: 4px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-primary { background: var(--accent); color: #080c10; }
+    .btn-primary:hover:not(:disabled) { background: #00f0c3; box-shadow: 0 4px 20px rgba(0,212,170,.35); transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn-danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); margin-top: 8px; }
+    .btn-danger:hover { background: rgba(248,81,73,.08); }
+    .alert { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; font-family: 'IBM Plex Mono', monospace; display: none; align-items: flex-start; gap: 8px; }
+    .alert.show { display: flex; animation: fadeIn .2s ease; }
+    .alert-error   { background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.3);  color: var(--danger); }
+    .alert-success { background: rgba(0,212,170,.08);  border: 1px solid rgba(0,212,170,.3); color: var(--accent); }
+    #dashboard-panel { display: none; }
+    #dashboard-panel.active { display: block; animation: fadeIn .3s ease; }
+    .dash-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .dash-title { font-size: 18px; font-weight: 800; }
+    .status-dot { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--accent); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+    .token-preview { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); word-break: break-all; line-height: 1.6; margin-bottom: 16px; }
+    .token-label { font-size: 9px; text-transform: uppercase; letter-spacing: .8px; color: var(--warn); margin-bottom: 6px; }
+    .spinner { width: 16px; height: 16px; border: 2px solid rgba(8,12,16,.3); border-top-color: #080c10; border-radius: 50%; animation: spin .6s linear infinite; display: none; }
+    .spinner.show { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .footer { text-align: center; margin-top: 20px; }
+    .footer p { font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); }
+    .footer span { color: var(--accent); }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#00d4aa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        <path d="M9 12l2 2 4-4"/>
+      </svg>
+    </div>
+    <h1>Secure<span>Login</span></h1>
+    <p>// JWT · BCrypt · Spring Boot</p>
+  </div>
+
+  <!-- Auth card -->
+  <div class="card" id="auth-card">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('login')">Sign In</button>
+      <button class="tab-btn" onclick="switchTab('register')">Register</button>
+    </div>
+
+    <!-- Login -->
+    <div class="panel active" id="login-panel">
+      <div class="alert alert-error" id="login-error">
+        <span>✕</span><span id="login-error-msg"></span>
+      </div>
+      <div class="field">
+        <label>Username or Email</label>
+        <input type="text" id="login-username" placeholder="enter username or email" autocomplete="username" />
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+      <button class="btn btn-primary" id="login-btn" onclick="doLogin()">
+        <div class="spinner" id="login-spinner"></div>
+        <span id="login-btn-text">Sign In</span>
+      </button>
+    </div>
+
+    <!-- Register -->
+    <div class="panel" id="register-panel">
+      <div class="alert alert-error"   id="reg-error"><span>✕</span><span id="reg-error-msg"></span></div>
+      <div class="alert alert-success" id="reg-success"><span>✓</span><span id="reg-success-msg"></span></div>
+      <div class="field">
+        <label>Full Name</label>
+        <input type="text" id="reg-fullname" placeholder="Jane Doe" autocomplete="name" />
+      </div>
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="reg-username" placeholder="janedoe" autocomplete="username" />
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="jane@example.com" autocomplete="email" />
+      </div>
+      <div class="field">
+        <label>Password <span style="color:var(--muted);font-size:10px;">(min 8 chars)</span></label>
+        <input type="password" id="reg-password" placeholder="••••••••" autocomplete="new-password" />
+      </div>
+      <button class="btn btn-primary" id="reg-btn" onclick="doRegister()">
+        <div class="spinner" id="reg-spinner"></div>
+        <span id="reg-btn-text">Create Account</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="card" id="dashboard-panel">
+    <div style="padding: 24px 28px 0;">
+      <div class="dash-header">
+        <div class="dash-title">Dashboard</div>
+        <div class="status-dot"><div class="dot"></div> Authenticated</div>
+      </div>
+      <div class="alert alert-success" id="protected-ok" style="margin-bottom:16px;">
+        <span>✓</span><span>GET /api/user/me → <strong>200 OK</strong> — token is valid.</span>
+      </div>
+      <div class="alert alert-error" id="protected-fail" style="margin-bottom:16px;">
+        <span>✕</span><span id="protected-fail-msg"></span>
+      </div>
+      <div class="token-preview">
+        <div class="token-label">🔑 JWT Token (stored in memory)</div>
+        <div id="token-display">—</div>
+      </div>
+      <button class="btn btn-primary" onclick="testProtected()" style="margin-bottom:8px;">
+        <div class="spinner" id="test-spinner"></div>
+        <span id="test-btn-text">▸ Call Protected Endpoint</span>
+      </button>
+    </div>
+    <div style="padding: 8px 28px 24px;">
+      <button class="btn btn-danger" onclick="doLogout()">⏻ Sign Out</button>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>Backend: <span>Spring Boot 3.2</span> · Auth: <span>JWT + BCrypt</span> · Proxy: <span>Apache</span></p>
+  </div>
+</div>
+
+<script>
+  // ── Config ────────────────────────────────────────────────
+  // Local dev:  'http://localhost:8080'  (direct to Spring Boot)
+  // Via Apache: 'http://localhost'       (Apache proxies /api/*)
+  // Production: 'https://yourdomain.com' (Apache on AWS)
+  const API_BASE = 'http://localhost';
+
+  let jwtToken = null;  // stored in memory only — never localStorage
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach((b, i) =>
+      b.classList.toggle('active', (i === 0) === (tab === 'login')));
+    document.getElementById('login-panel').classList.toggle('active', tab === 'login');
+    document.getElementById('register-panel').classList.toggle('active', tab === 'register');
+    clearAlerts();
+  }
+
+  async function doLogin() {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    if (!username || !password) return showError('login', 'Please fill in all fields.');
+    setLoading('login', true);
+    clearAlerts();
+    try {
+      const res  = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Login failed.');
+      jwtToken = data.token;
+      showDashboard();
+    } catch (err) {
+      showError('login', err.message);
+    } finally {
+      setLoading('login', false);
+    }
+  }
+
+  async function doRegister() {
+    const fullName = document.getElementById('reg-fullname').value.trim();
+    const username = document.getElementById('reg-username').value.trim();
+    const email    = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value;
+    if (!username || !email || !password) return showError('reg', 'Username, email and password are required.');
+    if (password.length < 8) return showError('reg', 'Password must be at least 8 characters.');
+    setLoading('reg', true);
+    clearAlerts();
+    try {
+      const res  = await fetch(`${API_BASE}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, password, fullName })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const msg = typeof data === 'object' && !data.message
+          ? Object.values(data).join(' · ') : data.message;
+        throw new Error(msg || 'Registration failed.');
+      }
+      document.getElementById('reg-success').classList.add('show');
+      document.getElementById('reg-success-msg').textContent = 'Account created! You can now sign in.';
+      document.getElementById('login-username').value = username;
+      setTimeout(() => switchTab('login'), 1800);
+    } catch (err) {
+      showError('reg', err.message);
+    } finally {
+      setLoading('reg', false);
+    }
+  }
+
+  async function testProtected() {
+    document.getElementById('protected-ok').classList.remove('show');
+    document.getElementById('protected-fail').classList.remove('show');
+    document.getElementById('test-spinner').classList.add('show');
+    document.getElementById('test-btn-text').style.opacity = '0';
+    try {
+      const res = await fetch(`${API_BASE}/api/user/me`, {
+        headers: { 'Authorization': `Bearer ${jwtToken}` }
+      });
+      if (res.ok) {
+        document.getElementById('protected-ok').classList.add('show');
+      } else {
+        document.getElementById('protected-fail-msg').textContent =
+          `Server returned ${res.status} — token may be invalid or expired.`;
+        document.getElementById('protected-fail').classList.add('show');
+      }
+    } catch (err) {
+      document.getElementById('protected-fail-msg').textContent = 'Request failed: ' + err.message;
+      document.getElementById('protected-fail').classList.add('show');
+    } finally {
+      document.getElementById('test-spinner').classList.remove('show');
+      document.getElementById('test-btn-text').style.opacity = '1';
+    }
+  }
+
+  function showDashboard() {
+    document.getElementById('auth-card').style.display = 'none';
+    const dash = document.getElementById('dashboard-panel');
+    dash.style.display = 'block';
+    dash.classList.add('active');
+    document.getElementById('protected-ok').classList.remove('show');
+    document.getElementById('protected-fail').classList.remove('show');
+    document.getElementById('token-display').textContent =
+      jwtToken ? jwtToken.slice(0, 44) + '…' + jwtToken.slice(-20) : '—';
+  }
+
+  function doLogout() {
+    jwtToken = null;
+    document.getElementById('dashboard-panel').style.display = 'none';
+    document.getElementById('dashboard-panel').classList.remove('active');
+    document.getElementById('auth-card').style.display = 'block';
+    document.getElementById('login-password').value = '';
+    switchTab('login');
+  }
+
+  function showError(prefix, msg) {
+    document.getElementById(`${prefix}-error-msg`).textContent = msg;
+    document.getElementById(`${prefix}-error`).classList.add('show');
+  }
+  function clearAlerts() {
+    document.querySelectorAll('.alert').forEach(a => a.classList.remove('show'));
+  }
+  function setLoading(prefix, loading) {
+    document.getElementById(`${prefix}-btn`).disabled = loading;
+    document.getElementById(`${prefix}-spinner`).classList.toggle('show', loading);
+    document.getElementById(`${prefix}-btn-text`).style.opacity = loading ? '0' : '1';
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    document.getElementById('login-panel').classList.contains('active') ? doLogin() : doRegister();
+  });
+</script>
+</body>
+</html>
