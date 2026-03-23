@@ -118,13 +118,13 @@ Requires `Authorization: Bearer <token>`. The `JwtAuthFilter` validates the toke
 200 OK  — token is valid
 403     — token is missing, expired, or tampered with
 ```
-
+---
 ## Security Features
 ### **Password hashing (BCrypt).**  
 Passwords are securely hashed using BCrypt with a cost factor of 12 (4096 iterations). This makes hashing intentionally slow, which helps protect against brute-force attacks. Each password is also salted automatically, so identical passwords never produce the same hash. The original password is never stored or exposed—Spring Security handles verification safely during login.
 
 ### **Secret management.**  
-Sensitive data like the JWT secret and database password are stored in environment variables, not in the codebase. Docker Compose loads them from a `.env` file at runtime. This file is excluded from version control, and only a safe `.env.example` template is shared.
+Sensitive data like the JWT secret and database password are stored in environment variables, not in the codebase. Docker Compose loads them from a `.env` file at runtime. This file is excluded from version control.
 
 ### **TLS (secure connections).**  
 The server only allows modern, secure protocols (TLS 1.2 and 1.3). Older, insecure versions are disabled. It also uses strong encryption (ECDHE) that ensures forward secrecy—meaning even if a key is compromised later, past data remains secure. All HTTP traffic is automatically redirected to HTTPS.
@@ -142,7 +142,7 @@ Only the web server (Apache) is publicly accessible. The database and backend ar
 ### **CORS policy.**  
 Only approved frontend origins (set via environment variables) can access the API. Requests from other origins are blocked early, preventing unauthorized cross-site requests.
 
-
+---
 ## **Apache Configuration**
 Apache configuration files are stored in `src/main/resources/apache/` and mounted into the `httpd:2.4-alpine` container using Docker volumes. This lets you update Apache settings by just restarting the container—no need to rebuild the image.
 
@@ -161,3 +161,71 @@ Apache configuration files are stored in `src/main/resources/apache/` and mounte
 - Special settings:  
   - `SSLUseStapling off` avoids errors with DuckDNS Let’s Encrypt certificates.  
   - `User daemon` / `Group daemon` fixes Alpine warnings about missing web server users.
+
+
+## Docker Setup
+ 
+### **Dockerfile — multi-stage build.** 
+Stage one uses `maven:3.9.6-eclipse-temurin-21` to compile the project. It copies `pom.xml` and runs `mvn dependency:go-offline` first, creating a cached Docker layer for dependencies that is reused on subsequent builds when only source files changed. Stage two uses `eclipse-temurin:21-jre-jammy` — a minimal JRE image with no compiler or build tools — copies only the compiled JAR, and runs it as a non-root `appuser`. This reduces the final image size from ~600 MB (if the JDK and Maven were included) to ~250 MB.
+ 
+### **docker-compose.yml (local)** 
+It defines three services. `postgres` uses a health check (`pg_isready`) and a named volume for persistence. `login-service` declares `depends_on: condition: service_healthy` so Spring Boot waits for PostgreSQL to be ready before starting, avoiding connection errors on cold starts. It receives all config via environment variables that override the `application.properties` defaults, and uses `expose: "8080"` so the port is internal only. `apache` mounts the local HTTP config and the `frontend/` folder and maps port 80 to the host.
+ 
+### **docker-compose.prod.yml (production)** 
+Is identical to the local version with two differences: Apache uses `httpd.prod.conf` instead of the local config, and it maps port 443 in addition to port 80, with `/etc/letsencrypt` mounted read-only from the host so the container can access the TLS certificates.
+ 
+## **Environment variables** 
+Those are injected at runtime from `.env`, a file that is never committed.
+ 
+| Variable | Required | Description | How to generate |
+|---|---|---|---|
+| `DB_NAME` | No (default: logindb) | PostgreSQL database name | Any string |
+| `DB_USER` | No (default: loginuser) | PostgreSQL username | Any string |
+| `DB_PASSWORD` | **Yes** | PostgreSQL password | `openssl rand -base64 32` |
+| `JWT_SECRET` | **Yes** | HMAC-SHA256 signing key — min 64 chars | `openssl rand -hex 64` |
+| `JWT_EXPIRATION_MS` | No (default: 86400000) | Token lifetime in ms | 86400000 = 24 h |
+| `CORS_ALLOWED_ORIGINS` | **Yes** | Allowed frontend origin | `https://yourdomain.duckdns.org` |
+
+---
+## How to run the project?
+### Running Locally
+#### **Option A — Without Docker (fastest for quick testing)**
+ 
+```bash
+mvn spring-boot:run
+```
+ 
+This uses an H2 in-memory database automatically. The API is at `http://localhost:8080` and the H2 console is at `http://localhost:8080/h2-console` (user: `sa`, password: empty). Open `frontend/index.html` directly in the browser and set `API_BASE = 'http://localhost:8080'` in the script.
+ 
+#### **Option B — Full stack with Docker**
+1. Create your .env
+   ```bash
+   # Fill in DB_PASSWORD and JWT_SECRET
+   # Generate them with:
+   #   openssl rand -base64 32   DB_PASSWORD
+   #   openssl rand -hex 64      JWT_SECRET
+   ```
+2. Start everyhting
+   ```bash
+   docker compose up -d --build
+   ```
+3. Check that Spring Boot started
+   ```bash
+   docker compose logs -f login-service
+   ```
+   After that, look for: Started SecureLoginApplication
+4. Open the app at `htttp://localhost`
+   
+   First you need to make sure that the variable `API_BASE` in the file `index.html` is set to `http://localhost`
+
+#### **Useful Commands**
+``` bash
+docker compose ps                            # check container status
+docker compose logs -f login-service         # Spring Boot logs
+docker compose logs apache                   # Apache logs
+docker compose stop                          # stop (data is preserved)
+docker compose start                         # start again
+docker compose down -v                       # stop and wipe the database
+docker compose up -d --build login-service   # rebuild only the backend
+```
+ 
