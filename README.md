@@ -228,4 +228,88 @@ docker compose start                         # start again
 docker compose down -v                       # stop and wipe the database
 docker compose up -d --build login-service   # rebuild only the backend
 ```
+---
+## Deploying to AWS
+### Step by step
+ 
+#### **1. Install dependencies on the EC2**
+ 
+```bash
+sudo dnf update -y
+sudo dnf install -y git docker python3-pip
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker ec2-user
+newgrp docker
+ 
+# Docker Compose plugin
+sudo mkdir -p /usr/local/lib/docker/cli-plugins
+sudo curl -SL https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-linux-x86_64 \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+ 
+# Certbot
+sudo pip3 install certbot
+```
+ 
+#### **2. Point your DuckDNS domain to the EC2 public IP**
+ 
+Log in to duckdns.org, enter your EC2 public IPv4 address in the IP field, and click Update IP.
+ 
+#### **3. Get the HTTPS certificate (port 80 must be free — run before Docker)**
+ 
+```bash
+sudo certbot certonly --standalone \
+  -d yourdomain.duckdns.org \
+  --email you@example.com \
+  --agree-tos \
+  --no-eff-email
+```
+ 
+#### **4. Clone the repository and create .env**
+ 
+```bash
+git clone https://github.com/yourusername/securelogin.git
+cd securelogin
+nano .env
+# Set DB_PASSWORD, JWT_SECRET, and CORS_ALLOWED_ORIGINS=https://yourdomain.duckdns.org
+```
+ 
+#### **5. Set your domain in the config files**
+```bash
+sed -i 's/yourdomain.com/yourdomain.duckdns.org/g' \
+  src/main/resources/apache/httpd.prod.conf
+ 
+sed -i 's|http://localhost|https://yourdomain.duckdns.org|g' \
+  frontend/index.html
+```
+ 
+#### **6. Start the production stack**
+ 
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+ 
+#### **7. Verify**
+ 
+```bash
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f login-service
+sudo docker logs login_apache
+```
+ 
+Open `https://yourdomain.duckdns.org` in your browser.
+ 
+#### **Daily operations**
+ 
+```bash
+# Stop containers (database is preserved)
+docker compose -f docker-compose.prod.yml stop
+ 
+# Start again
+docker compose -f docker-compose.prod.yml start
+ 
+# Check database
+sudo docker exec -it login_postgres psql -U loginuser -d logindb -c "SELECT * FROM users;"
+```
  
