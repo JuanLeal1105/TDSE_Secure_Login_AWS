@@ -325,3 +325,6 @@ sudo docker exec -it login_postgres psql -U loginuser -d logindb -c "SELECT * FR
 
 4. **Testing the protected endpoint**
    ![ProtectedEndpoint.png](images/ProtectedEndpoint.png)
+
+## **Explanation Video**
+[![Ver demo](https://img.youtube.com/vi/0l-ruaCVu_4/maxresdefault.jpg)](https://youtu.be/0l-ruaCVu_4)
