@@ -312,4 +312,16 @@ docker compose -f docker-compose.prod.yml start
 # Check database
 sudo docker exec -it login_postgres psql -U loginuser -d logindb -c "SELECT * FROM users;"
 ```
- 
+
+## **Evidence of deployment**
+1. **Login page**
+   ![Login.png](images/Login.png)
+
+2. **Authenticated user**
+   ![Auth.png](images/Auth.png)
+
+3. **Database implementation**
+   ![Database.png](images/Database.png)
+
+4. **Testing the protected endpoint**
+   ![ProtectedEndpoint.png](images/ProtectedEndpoint.png)
